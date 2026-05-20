@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
@@ -11,164 +12,141 @@ use Illuminate\Support\Facades\Mail;
 
 class LoginController extends Controller
 {
-    /**
-     * Show the login form (email only)
-     */
     public function showLoginForm()
     {
         return view('auth.login');
     }
 
-    /**
-     * Request a verification code to be sent to email
-     */
     public function requestCode(Request $request)
-{
-    $request->validate([
-        'email' => 'required|email',
-    ]);
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
 
-    $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
 
-    if (!$user) {
-        return back()->withErrors(['email' => 'No account found with this email address.'])
-                    ->onlyInput('email');
+        if (!$user) {
+            return back()->withErrors(['email' => 'No account found with this email address.'])
+                ->onlyInput('email');
+        }
+
+        // 🔥 INVALDATE ALL OLD CODES (CRITICAL FIX)
+        LoginCode::where('email', $request->email)
+            ->update(['used' => 1]);
+
+        // Generate OTP
+        $code = LoginCode::generateCode();
+
+        LoginCode::create([
+            'email' => $request->email,
+            'code' => $code,
+            'expires_at' => now()->addMinutes(10),
+            'used' => 0,
+        ]);
+
+        try {
+            Mail::to($request->email)->send(new LoginCodeMail($code, $user->name));
+
+            session(['verification_email' => $request->email]);
+
+            return redirect()->route('login.verify.show')
+                ->with('success', 'Verification code sent!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['email' => 'Failed to send email.']);
+        }
     }
 
-    // ❗ IMPORTANT FIX: invalidate ALL previous codes
-    LoginCode::where('email', $request->email)
-        ->update(['used' => 1]);
-
-    // Generate new code
-    $code = LoginCode::generateCode();
-
-    LoginCode::create([
-        'email' => $request->email,
-        'code' => $code,
-        'expires_at' => now()->addMinutes(10),
-        'used' => 0,
-    ]);
-
-    try {
-        Mail::to($request->email)->send(new LoginCodeMail($code, $user->name));
-
-        session(['verification_email' => $request->email]);
-
-        return redirect()->route('login.verify.show')
-            ->with('success', 'Verification code sent to your email!');
-    } catch (\Exception $e) {
-        return back()->withErrors(['email' => 'Failed to send email. Please try again.'])
-                    ->onlyInput('email');
-    }
-}
-
-    /**
-     * Show the code verification form
-     */
     public function showVerifyForm()
     {
         if (!session('verification_email')) {
             return redirect()->route('login')
-                           ->withErrors(['email' => 'Please request a verification code first.']);
+                ->withErrors(['email' => 'Please request a code first.']);
         }
 
         return view('auth.verify-code');
     }
 
-    /**
-     * Verify the code and log in the user
-     */
     public function verifyCode(Request $request)
-{
-    $request->validate([
-        'code' => 'required|string|size:6',
-    ]);
+    {
+        $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
 
-    $email = session('verification_email');
+        $email = session('verification_email');
 
-    if (!$email) {
-        return redirect()->route('login')
-            ->withErrors(['email' => 'Session expired. Please request a new code.']);
+        if (!$email) {
+            return redirect()->route('login')
+                ->withErrors(['email' => 'Session expired. Please request a new code.']);
+        }
+
+        // 🔥 ALWAYS FETCH LATEST CODE (NO FILTER DEPENDENCY)
+        $loginCode = LoginCode::where('email', $email)
+            ->orderByDesc('id')
+            ->first();
+
+        // 🔥 SAFE VALIDATION (NO SQL DEPENDENCY)
+        if (
+            !$loginCode ||
+            (int)$loginCode->used !== 0 ||
+            now()->greaterThan($loginCode->expires_at) ||
+            (string)$loginCode->code !== (string)$request->code
+        ) {
+            return back()->withErrors(['code' => 'Code expired or invalid.']);
+        }
+
+        $loginCode->update(['used' => 1]);
+
+        $user = User::where('email', $email)->first();
+
+        Auth::login($user, $request->boolean('remember'));
+
+        session()->forget('verification_email');
+
+        $request->session()->regenerate();
+
+        return redirect()->intended(route('dashboard'))
+            ->with('success', 'Welcome back, ' . $user->name . '!');
     }
 
-    // ❗ STRICT FIX: only ONE valid code allowed
-    $loginCode = LoginCode::where('email', $email)
-    ->orderByDesc('id')
-    ->first();
-
-if (
-    !$loginCode ||
-    (int)$loginCode->used !== 0 ||
-    now()->greaterThan($loginCode->expires_at) ||
-    (string)$loginCode->code !== (string)$request->code
-) {
-    return back()->withErrors(['code' => 'Code expired or invalid.']);
-}
-
-    // ❗ STRING SAFE COMPARISON
-    if ((string) $loginCode->code !== (string) $request->code) {
-        return back()->withErrors(['code' => 'Invalid verification code.']);
-    }
-
-    // Mark as used
-    $loginCode->update(['used' => 1]);
-
-    $user = User::where('email', $email)->first();
-
-    Auth::login($user, $request->boolean('remember'));
-
-    session()->forget('verification_email');
-
-    $request->session()->regenerate();
-
-    return redirect()->intended(route('dashboard'))
-        ->with('success', 'Welcome back, ' . $user->name . '!');
-}
-
-    /**
-     * Resend verification code
-     */
     public function resendCode(Request $request)
-{
-    $email = session('verification_email');
+    {
+        $email = session('verification_email');
 
-    if (!$email) {
-        return redirect()->route('login')
-            ->withErrors(['email' => 'Session expired. Please start again.']);
+        if (!$email) {
+            return redirect()->route('login')
+                ->withErrors(['email' => 'Session expired.']);
+        }
+
+        $user = User::where('email', $email)->first();
+
+        // 🔥 invalidate old OTPs
+        LoginCode::where('email', $email)
+            ->update(['used' => 1]);
+
+        $code = LoginCode::generateCode();
+
+        LoginCode::create([
+            'email' => $email,
+            'code' => $code,
+            'expires_at' => now()->addMinutes(10),
+            'used' => 0,
+        ]);
+
+        try {
+            Mail::to($email)->send(new LoginCodeMail($code, $user->name));
+
+            return back()->with('success', 'New code sent!');
+        } catch (\Exception $e) {
+            return back()->withErrors(['code' => 'Failed to send email.']);
+        }
     }
 
-    $user = User::where('email', $email)->first();
-
-    // ❗ FIX: invalidate old codes before resend
-    LoginCode::where('email', $email)
-        ->update(['used' => 1]);
-
-    $code = LoginCode::generateCode();
-
-    LoginCode::create([
-        'email' => $email,
-        'code' => $code,
-        'expires_at' => now()->addMinutes(10),
-        'used' => 0,
-    ]);
-
-    try {
-        Mail::to($email)->send(new LoginCodeMail($code, $user->name));
-
-        return back()->with('success', 'New verification code sent!');
-    } catch (\Exception $e) {
-        return back()->withErrors(['code' => 'Failed to send email. Please try again.']);
-    }
-}
-
-    /**
-     * Logout the user
-     */
     public function logout(Request $request)
     {
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect()->route('login');
     }
 }
