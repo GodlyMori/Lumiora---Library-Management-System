@@ -100,6 +100,11 @@ class LoginController extends Controller
 
         Auth::login($user, $request->boolean('remember'));
 
+        dd([
+    'auth_check' => Auth::check(),
+    'user' => Auth::user()
+]);
+
         session()->forget('verification_email');
 
         $request->session()->regenerate();
