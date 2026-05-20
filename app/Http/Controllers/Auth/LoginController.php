@@ -93,14 +93,17 @@ class LoginController extends Controller
 
     // ❗ STRICT FIX: only ONE valid code allowed
     $loginCode = LoginCode::where('email', $email)
-        ->where('used', 0)
-        ->where('expires_at', '>=', now())
-        ->latest()
-        ->first();
+    ->orderByDesc('id')
+    ->first();
 
-    if (!$loginCode) {
-        return back()->withErrors(['code' => 'Code expired. Please request a new one.']);
-    }
+if (
+    !$loginCode ||
+    (int)$loginCode->used !== 0 ||
+    now()->greaterThan($loginCode->expires_at) ||
+    (string)$loginCode->code !== (string)$request->code
+) {
+    return back()->withErrors(['code' => 'Code expired or invalid.']);
+}
 
     // ❗ STRING SAFE COMPARISON
     if ((string) $loginCode->code !== (string) $request->code) {
