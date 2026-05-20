@@ -51,17 +51,17 @@ class LoginController extends Controller
         ]);
 
         // Send the code via email
-        try {
-    Mail::raw('Test email from Render', function ($message) use ($request) {
-        $message->to($request->email)
-                ->subject('Render Test');
-    });
-
+try {
+    Mail::to($request->email)->send(new LoginCodeMail($code, $user->name));
+    
+    // Store email in session for verification step
     session(['verification_email' => $request->email]);
-
-    return "EMAIL SENT SUCCESSFULLY";
+    
+    return redirect()->route('login.verify.show')
+                   ->with('success', 'Verification code sent to your email!');
 } catch (\Exception $e) {
-    return $e->getMessage();
+    return back()->withErrors(['email' => 'Failed to send email. Please try again.'])
+                ->onlyInput('email');
 }
     }
 
