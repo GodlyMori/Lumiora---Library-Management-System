@@ -96,8 +96,8 @@
                         @forelse($recentBorrowings as $b)
                         <tr>
                             <td>
-                                <a href="{{ route('members.show',$b->member) }}" class="text-decoration-none fw-500">
-                                    {{ $b->member->name }}
+                                <a href="{{ route('members.show',$b->member_id) }}" class="text-decoration-none fw-500">
+                                    {{ $b->member_name ?? 'Unknown' }}
                                 </a>
                             </td>
                             <td class="text-truncate" style="max-width:140px" title="{{ $b->book->title }}">{{ $b->book->title }}</td>

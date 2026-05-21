@@ -21,10 +21,10 @@ class DashboardController extends Controller
         $totalUnpaidFines  = DB::table('v_member_summary')->sum('unpaid_fines');
 
         // ── Recent borrowings from view ────────────────────────────
-        $recentBorrowings = DB::table('v_active_borrowings')
-            ->orderBy('issue_date', 'desc')
-            ->take(8)
-            ->get();
+        $recentBorrowings = \App\Models\Borrowing::with(['member', 'book'])
+    ->latest()
+    ->take(8)
+    ->get();
 
         // ── Monthly chart from v_monthly_stats ─────────────────────
         $monthlyStats = DB::table('v_monthly_stats')
