@@ -76,50 +76,12 @@ class LoginController extends Controller
 
     $email = session('verification_email');
 
-    if (!$email) {
-        return redirect()->route('login')
-            ->withErrors([
-                'email' => 'Session expired. Please request a new code.'
-            ]);
-    }
-
-    $loginCode = LoginCode::where('email', $email)
-        ->where('used', 0)
-        ->latest('id')
-        ->first();
-
-    if (!$loginCode) {
-        return back()->withErrors([
-            'code' => 'No active verification code found.'
-        ]);
-    }
-
-    if (trim($request->code) !== trim($loginCode->code)) {
-        return back()->withErrors([
-            'code' => 'Incorrect verification code.'
-        ]);
-    }
-
-    if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
-        return back()->withErrors([
-            'code' => 'Code expired.'
-        ]);
-    }
-
-    $loginCode->update([
-        'used' => 1
+    dd([
+        'session_email' => $email,
+        'input_code' => $request->code,
+        'all_codes' => LoginCode::all(),
     ]);
 
-    $user = User::where('email', $email)->first();
-
-    Auth::login($user);
-
-    session()->forget('verification_email');
-
-    $request->session()->regenerate();
-
-    return redirect()->route('dashboard')
-        ->with('success', 'Welcome back, ' . $user->name . '!');
 }
 
     public function logout(Request $request)
