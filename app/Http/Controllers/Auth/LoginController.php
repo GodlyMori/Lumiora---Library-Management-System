@@ -84,7 +84,6 @@ class LoginController extends Controller
     }
 
     $loginCode = LoginCode::where('email', $email)
-        ->where('used', 0)
         ->latest()
         ->first();
 
