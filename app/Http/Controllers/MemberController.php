@@ -47,11 +47,13 @@ class MemberController extends Controller
         ]);
 
         $data['max_books'] = $data['max_books'] ?? 5;
-        // Trigger auto-generates membership_id
 
-        $member = Member::create($data);
-        return redirect()->route('members.show', $member)
-            ->with('success', "Member '{$member->name}' registered! ID: {$member->membership_id}");
+$data['membership_id'] = 'MEM-' . str_pad(Member::count() + 1, 4, '0', STR_PAD_LEFT);
+
+$member = Member::create($data);
+
+return redirect()->route('members.show', $member)
+    ->with('success', "Member '{$member->name}' registered! ID: {$member->membership_id}");
     }
 
     public function show(Member $member)
