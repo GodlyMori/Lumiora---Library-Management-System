@@ -18,45 +18,42 @@ class LoginController extends Controller
     }
 
     public function requestCode(Request $request)
-{
-    $request->validate([
-        'email' => 'required|email',
-    ]);
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
 
-    $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
 
-    if (!$user) {
-        return back()->withErrors([
-            'email' => 'No account found with this email address.'
-        ])->onlyInput('email');
+        if (!$user) {
+            return back()->withErrors([
+                'email' => 'No account found with this email address.'
+            ])->onlyInput('email');
+        }
+
+        // remove old codes
+        LoginCode::where('email', $request->email)->delete();
+
+        $code = LoginCode::generateCode();
+
+        $loginCode = LoginCode::create([
+            'email' => $request->email,
+            'code' => $code,
+            'expires_at' => now()->addMinutes(10),
+            'used' => 0,
+        ]);
+
+        // store session (IMPORTANT)
+        session([
+            'verification_email' => $request->email
+        ]);
+
+        // send email (make sure this works in prod)
+        Mail::to($request->email)->send(new LoginCodeMail($code));
+
+        return redirect()->route('login.verify.show')
+            ->with('success', 'Verification code sent to your email.');
     }
-
-    // Delete old codes
-    LoginCode::where('email', $request->email)->delete();
-
-    $code = LoginCode::generateCode();
-
-    LoginCode::create([
-        'email' => $request->email,
-        'code' => $code,
-        'expires_at' => now()->addMinutes(10),
-        'used' => false,
-    ]);
-
-    // Store email in session
-    session([
-        'verification_email' => $request->email
-    ]);
-
-    // Send email
-    Mail::to($request->email)->send(
-        new LoginCodeMail($code)
-    );
-
-    // Redirect to verify page
-    return redirect()->route('login.verify.show')
-        ->with('success', 'Verification code sent to your email.');
-}
 
     public function showVerifyForm()
     {
@@ -69,73 +66,83 @@ class LoginController extends Controller
     }
 
     public function verifyCode(Request $request)
-{
-    $request->validate([
-        'code' => 'required|string|size:6',
-    ]);
+    {
+        $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
 
-    $email = session('verification_email');
+        $email = session('verification_email');
 
-    if (!$email) {
-        return redirect()->route('login')
-            ->withErrors([
-                'email' => 'Session expired. Please request a new code.'
+        if (!$email) {
+            return redirect()->route('login')
+                ->withErrors([
+                    'email' => 'Session expired. Please request a new code.'
+                ]);
+        }
+
+        // DEBUG SAFE QUERY (no filtering issues)
+        $loginCode = LoginCode::where('email', $email)
+            ->latest()
+            ->first();
+
+        if (!$loginCode) {
+            return back()->withErrors([
+                'code' => 'No verification code found.'
             ]);
-    }
+        }
 
-    $loginCode = LoginCode::where('email', $email)
-        ->latest()
-        ->first();
-
-    if (!$loginCode) {
-        return back()->withErrors([
-            'code' => 'No active verification code found.'
+        // DEBUG: uncomment if needed
+        /*
+        dd([
+            'now' => now(),
+            'expires_at' => $loginCode->expires_at,
+            'diff' => now()->diffInSeconds($loginCode->expires_at, false),
+            'code_db' => $loginCode->code,
+            'code_input' => $request->code,
         ]);
-    }
+        */
 
-    // DEBUG (remove later if everything works)
-    // dd([
-    //     'now' => now(),
-    //     'expires_at' => $loginCode->expires_at,
-    //     'is_expired' => now()->gt($loginCode->expires_at),
-    //     'db_code' => $loginCode->code,
-    //     'input_code' => $request->code,
-    // ]);
-
-    if (now()->gt($loginCode->expires_at)) {
-        return back()->withErrors([
-            'code' => 'Code expired.'
-        ]);
-    }
-
-    if (trim($request->code) !== trim($loginCode->code)) {
-        return back()->withErrors([
-            'code' => 'Incorrect verification code.'
-        ]);
-    }
-
-    $loginCode->update([
-        'used' => 1
-    ]);
-
-    $user = User::where('email', $email)->first();
-
-    if (!$user) {
-        return redirect()->route('login')
-            ->withErrors([
-                'email' => 'User not found.'
+        // SAFE expiration check (timezone-proof)
+        if (now()->greaterThan($loginCode->expires_at)) {
+            return back()->withErrors([
+                'code' => 'Code expired.'
             ]);
+        }
+
+        if (trim($request->code) !== trim($loginCode->code)) {
+            return back()->withErrors([
+                'code' => 'Incorrect verification code.'
+            ]);
+        }
+
+        if ($loginCode->used) {
+            return back()->withErrors([
+                'code' => 'Code already used.'
+            ]);
+        }
+
+        $loginCode->update([
+            'used' => 1
+        ]);
+
+        $user = User::where('email', $email)->first();
+
+        if (!$user) {
+            return redirect()->route('login')
+                ->withErrors([
+                    'email' => 'User not found.'
+                ]);
+        }
+
+        Auth::login($user);
+
+        session()->forget('verification_email');
+
+        request()->session()->regenerate();
+
+        return redirect()->route('dashboard')
+            ->with('success', 'Welcome back, ' . $user->name . '!');
     }
-
-    Auth::login($user);
-
-    session()->forget('verification_email');
-
-    $request->session()->regenerate();
-
-    return redirect()->route('dashboard')
-        ->with('success', 'Welcome back, ' . $user->name . '!');
-}
 
     public function logout(Request $request)
     {
