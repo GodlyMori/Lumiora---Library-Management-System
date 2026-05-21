@@ -80,9 +80,10 @@ class LoginController extends Controller
     }
 
     $loginCode = LoginCode::where('email', $email)
-        ->where('code', $request->code)
-        ->orderByDesc('id')
-        ->first();
+    ->where('code', $request->code)
+    ->where('used', 0)
+    ->latest()
+    ->first();
 
     if (!$loginCode) {
         return back()->withErrors(['code' => 'Code expired or invalid.']);
