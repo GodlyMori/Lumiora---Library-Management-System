@@ -88,8 +88,23 @@ class LoginController extends Controller
     ->first();
 
 if (!$loginCode) {
-    return back()->withErrors([
-        'code' => 'No active verification code found.'
+
+    $allCodes = LoginCode::where('email', $email)
+        ->latest()
+        ->get();
+
+    dd([
+        'session_email' => $email,
+        'entered_code' => trim($request->code),
+        'all_codes' => $allCodes->map(function ($c) {
+            return [
+                'id' => $c->id,
+                'code' => $c->code,
+                'used' => $c->used,
+                'expires_at' => $c->expires_at,
+                'created_at' => $c->created_at,
+            ];
+        }),
     ]);
 }
 
