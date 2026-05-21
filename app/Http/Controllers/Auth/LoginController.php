@@ -79,15 +79,17 @@ class LoginController extends Controller
             ->withErrors(['email' => 'Session expired. Please request a new code.']);
     }
 
-    $loginCode = LoginCode::where('email', $email)
+    $loginCode = LoginCode::where('email', $request->email)
     ->where('code', $request->code)
-    ->where('used', 0)
-    ->latest()
     ->first();
 
-    if (!$loginCode) {
-        return back()->withErrors(['code' => 'Code expired or invalid.']);
-    }
+if (!$loginCode) {
+    return back()->with('error', 'Invalid verification code.');
+}
+
+if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
+    return back()->with('error', 'Code expired.');
+}
 
     // ✅ FIXED UTC COMPARISON
     if (now()->greaterThan($loginCode->expires_at)) {
