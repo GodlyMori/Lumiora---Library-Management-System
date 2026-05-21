@@ -92,7 +92,7 @@ class LoginController extends Controller
         }
 
         // DEBUG: uncomment if needed
-        /*
+        
         dd([
             'now' => now(),
             'expires_at' => $loginCode->expires_at,
@@ -100,7 +100,7 @@ class LoginController extends Controller
             'code_db' => $loginCode->code,
             'code_input' => $request->code,
         ]);
-        */
+        
 
         // SAFE expiration check (timezone-proof)
         if (now()->greaterThan($loginCode->expires_at)) {
