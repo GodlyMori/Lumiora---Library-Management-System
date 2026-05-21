@@ -64,7 +64,7 @@ return redirect()->route('members.show', $member)
 
     if (!$summary) {
         $summary = (object) [
-            'membership_status' => 'active',
+            'membership_status' => 'valid',
             'total_borrowed' => 0,
             'total_returned' => 0,
             'total_overdue' => 0,
