@@ -79,15 +79,36 @@ class LoginController extends Controller
             ->withErrors(['email' => 'Session expired. Please request a new code.']);
     }
 
-    $allCodes = LoginCode::where('email', $email)
+    $loginCode = LoginCode::where('email', $email)
+        ->where('code', $request->code)
         ->orderByDesc('id')
-        ->get();
+        ->first();
 
-    dd([
-    'entered_code' => $request->code,
-    'session_email' => $email,
-    'all_codes' => $allCodes->toArray(),
-]);
+    if (!$loginCode) {
+        return back()->withErrors(['code' => 'Code expired or invalid.']);
+    }
+
+    // ✅ FIXED UTC COMPARISON
+    if (now('UTC')->greaterThan(\Carbon\Carbon::parse($loginCode->expires_at))) {
+        return back()->withErrors(['code' => 'Code expired. Please request a new one.']);
+    }
+
+    if ((int)$loginCode->used === 1) {
+        return back()->withErrors(['code' => 'Code already used.']);
+    }
+
+    $loginCode->update(['used' => 1]);
+
+    $user = User::where('email', $email)->first();
+
+    Auth::login($user);
+
+    session()->forget('verification_email');
+
+    $request->session()->regenerate();
+
+    return redirect()->route('dashboard')
+        ->with('success', 'Welcome back, ' . $user->name . '!');
 }
     public function resendCode(Request $request)
     {
