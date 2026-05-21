@@ -86,7 +86,18 @@ class LoginController extends Controller
     ->first();
 
 if (!$loginCode) {
-    return back()->withErrors(['code' => 'Code expired or invalid.']);
+
+    $allCodes = LoginCode::where('email', $email)
+        ->latest()
+        ->take(5)
+        ->get();
+
+    dd([
+        'entered_code' => trim($request->code),
+        'email' => $email,
+        'codes_in_db' => $allCodes,
+    ]);
+
 }
 
 if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
