@@ -67,58 +67,28 @@ class LoginController extends Controller
     }
 
     public function verifyCode(Request $request)
-    {
-        $request->validate([
-            'code' => 'required|string|size:6',
-        ]);
+{
+    $request->validate([
+        'code' => 'required|string|size:6',
+    ]);
 
-        $email = session('verification_email');
+    $email = session('verification_email');
 
-        if (!$email) {
-            return redirect()->route('login')
-                ->withErrors(['email' => 'Session expired. Please request a new code.']);
-        }
-
-        // 🔥 ALWAYS FETCH LATEST CODE (NO FILTER DEPENDENCY)
-        $allCodes = LoginCode::where('email', $email)
-    ->orderByDesc('id')
-    ->get();
-
-dd([
-    'entered_code' => $request->code,
-    'session_email' => $email,
-    'all_codes' => $allCodes
-]);
-
-        // 🔥 SAFE VALIDATION (NO SQL DEPENDENCY)
-        if (
-            !$loginCode ||
-            (int)$loginCode->used !== 0 ||
-            now()->greaterThan($loginCode->expires_at) ||
-            (string)$loginCode->code !== (string)$request->code
-        ) {
-            return back()->withErrors(['code' => 'Code expired or invalid.']);
-        }
-
-        $loginCode->update(['used' => 1]);
-
-        $user = User::where('email', $email)->first();
-
-        Auth::login($user, $request->boolean('remember'));
-
-        dd([
-    'auth_check' => Auth::check(),
-    'user' => Auth::user()
-]);
-
-        session()->forget('verification_email');
-
-        $request->session()->regenerate();
-
-        return redirect()->intended(route('dashboard'))
-            ->with('success', 'Welcome back, ' . $user->name . '!');
+    if (!$email) {
+        return redirect()->route('login')
+            ->withErrors(['email' => 'Session expired. Please request a new code.']);
     }
 
+    $allCodes = LoginCode::where('email', $email)
+        ->orderByDesc('id')
+        ->get();
+
+    dd([
+        'entered_code' => $request->code,
+        'session_email' => $email,
+        'all_codes' => $allCodes
+    ]);
+}
     public function resendCode(Request $request)
     {
         $email = session('verification_email');
