@@ -18,42 +18,46 @@ class LoginController extends Controller
     }
 
     public function requestCode(Request $request)
-    {
-        $request->validate([
-            'email' => 'required|email',
-        ]);
+{
+    $request->validate([
+        'email' => 'required|email',
+    ]);
 
-        $user = User::where('email', $request->email)->first();
+    $user = User::where('email', $request->email)->first();
 
-        if (!$user) {
-            return back()->withErrors(['email' => 'No account found with this email address.'])
-                ->onlyInput('email');
-        }
-
-        // 🔥 INVALDATE ALL OLD CODES (CRITICAL FIX)
-        
-
-        // Generate OTP
-        $code = LoginCode::generateCode();
-
-        LoginCode::create([
-            'email' => $request->email,
-            'code' => $code,
-            'expires_at' => now()->addMinutes(10),
-            'used' => 0,
-        ]);
-
-        try {
-            Mail::to($request->email)->send(new LoginCodeMail($code, $user->name));
-
-            session(['verification_email' => $request->email]);
-
-            return redirect()->route('login.verify.show')
-                ->with('success', 'Verification code sent!');
-        } catch (\Exception $e) {
-            return back()->withErrors(['email' => 'Failed to send email.']);
-        }
+    if (!$user) {
+        return back()->withErrors([
+            'email' => 'No account found with this email address.'
+        ])->onlyInput('email');
     }
+
+    // Delete old codes instead of marking used
+    LoginCode::where('email', $request->email)->delete();
+
+    $code = LoginCode::generateCode();
+
+    LoginCode::create([
+        'email' => $request->email,
+        'code' => $code,
+        'expires_at' => now()->addMinutes(10),
+        'used' => 0,
+    ]);
+
+    try {
+        Mail::to($request->email)
+            ->send(new LoginCodeMail($code, $user->name));
+
+        session(['verification_email' => $request->email]);
+
+        return redirect()->route('login.verify.show')
+            ->with('success', 'Verification code sent!');
+
+    } catch (\Exception $e) {
+        return back()->withErrors([
+            'email' => 'Failed to send email.'
+        ]);
+    }
+}
 
     public function showVerifyForm()
     {
@@ -117,37 +121,39 @@ if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
         ->with('success', 'Welcome back, ' . $user->name . '!');
 }
     public function resendCode(Request $request)
-    {
-        $email = session('verification_email');
+{
+    $email = session('verification_email');
 
-        if (!$email) {
-            return redirect()->route('login')
-                ->withErrors(['email' => 'Session expired.']);
-        }
-
-        $user = User::where('email', $email)->first();
-
-        // 🔥 invalidate old OTPs
-        LoginCode::where('email', $email)
-            ->update(['used' => 1]);
-
-        $code = LoginCode::generateCode();
-
-        LoginCode::create([
-            'email' => $email,
-            'code' => $code,
-            'expires_at' => now()->addMinutes(10),
-            'used' => 0,
-        ]);
-
-        try {
-            Mail::to($email)->send(new LoginCodeMail($code, $user->name));
-
-            return back()->with('success', 'New code sent!');
-        } catch (\Exception $e) {
-            return back()->withErrors(['code' => 'Failed to send email.']);
-        }
+    if (!$email) {
+        return redirect()->route('login')
+            ->withErrors(['email' => 'Session expired.']);
     }
+
+    $user = User::where('email', $email)->first();
+
+    // DELETE old codes
+    LoginCode::where('email', $email)->delete();
+
+    $code = LoginCode::generateCode();
+
+    LoginCode::create([
+        'email' => $email,
+        'code' => $code,
+        'expires_at' => now()->addMinutes(10),
+        'used' => 0,
+    ]);
+
+    try {
+        Mail::to($email)->send(new LoginCodeMail($code, $user->name));
+
+        return back()->with('success', 'New code sent!');
+
+    } catch (\Exception $e) {
+        return back()->withErrors([
+            'code' => 'Failed to send email.'
+        ]);
+    }
+}
 
     public function logout(Request $request)
     {
