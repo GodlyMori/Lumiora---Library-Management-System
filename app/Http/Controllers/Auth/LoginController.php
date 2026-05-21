@@ -93,13 +93,13 @@ class LoginController extends Controller
 
         // DEBUG: uncomment if needed
         
-        dd([
-            'now' => now(),
-            'expires_at' => $loginCode->expires_at,
-            'diff' => now()->diffInSeconds($loginCode->expires_at, false),
-            'code_db' => $loginCode->code,
-            'code_input' => $request->code,
-        ]);
+        // dd([
+        //     'now' => now(),
+        //     'expires_at' => $loginCode->expires_at,
+        //     'diff' => now()->diffInSeconds($loginCode->expires_at, false),
+        //     'code_db' => $loginCode->code,
+        //     'code_input' => $request->code,
+        // ]);
         
 
         // SAFE expiration check (timezone-proof)
