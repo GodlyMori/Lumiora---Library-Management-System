@@ -57,11 +57,23 @@ return redirect()->route('members.show', $member)
     }
 
     public function show(Member $member)
-    {
-        // Get the enriched row from v_member_summary
-        $summary = DB::table('v_member_summary')->where('id', $member->id)->first();
-        return view('members.show', compact('member', 'summary'));
+{
+    $summary = DB::table('v_member_summary')
+        ->where('id', $member->id)
+        ->first();
+
+    if (!$summary) {
+        $summary = (object) [
+            'membership_status' => 'active',
+            'total_borrowed' => 0,
+            'total_returned' => 0,
+            'total_overdue' => 0,
+            'unpaid_fines' => 0,
+        ];
     }
+
+    return view('members.show', compact('member', 'summary'));
+}
 
     public function edit(Member $member)
     {
