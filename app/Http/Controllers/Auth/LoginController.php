@@ -93,10 +93,9 @@ dd($newCode);
             ]);
     }
 
-    // Get latest unused OTP
     $loginCode = LoginCode::where('email', $email)
-        ->where('used', false)
-        ->latest()
+        ->where('used', 0)
+        ->latest('id')
         ->first();
 
     if (!$loginCode) {
@@ -105,26 +104,22 @@ dd($newCode);
         ]);
     }
 
-    // Compare manually
     if (trim($request->code) !== trim($loginCode->code)) {
         return back()->withErrors([
             'code' => 'Incorrect verification code.'
         ]);
     }
 
-    // Check expiration
     if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
         return back()->withErrors([
             'code' => 'Code expired.'
         ]);
     }
 
-    // Mark as used
     $loginCode->update([
-        'used' => true
+        'used' => 1
     ]);
 
-    // Login user
     $user = User::where('email', $email)->first();
 
     Auth::login($user);
@@ -135,50 +130,6 @@ dd($newCode);
 
     return redirect()->route('dashboard')
         ->with('success', 'Welcome back, ' . $user->name . '!');
-}
-
-    public function resendCode(Request $request)
-{
-    $email = session('verification_email');
-
-    if (!$email) {
-        return redirect()->route('login')
-            ->withErrors(['email' => 'Session expired.']);
-    }
-
-    $user = User::where('email', $email)->first();
-
-    // DELETE old codes
-    LoginCode::where('email', $email)->delete();
-
-    $code = LoginCode::generateCode();
-
-    LoginCode::create([
-        'email' => $email,
-        'code' => $code,
-        'expires_at' => now()->addMinutes(10),
-        'used' => false,
-    ]);
-
-    $newCode = LoginCode::create([
-    'email' => $email,
-    'code' => $code,
-    'expires_at' => now()->addMinutes(10),
-    'used' => false,
-]);
-
-dd($newCode);
-
-    try {
-        Mail::to($email)->send(new LoginCodeMail($code, $user->name));
-
-        return back()->with('success', 'New code sent!');
-
-    } catch (\Exception $e) {
-        return back()->withErrors([
-            'code' => 'Failed to send email.'
-        ]);
-    }
 }
 
     public function logout(Request $request)
