@@ -31,7 +31,7 @@ class LoginController extends Controller
         ])->onlyInput('email');
     }
 
-    // Delete old codes instead of marking used
+    // Delete old codes
     LoginCode::where('email', $request->email)->delete();
 
     $code = LoginCode::generateCode();
@@ -43,12 +43,19 @@ class LoginController extends Controller
         'used' => false,
     ]);
 
-    LoginCode::create([
-    'email' => $request->email,
-    'code' => $code,
-    'expires_at' => now()->addMinutes(10),
-    'used' => false,
-]);
+    // Store email in session
+    session([
+        'verification_email' => $request->email
+    ]);
+
+    // Send email
+    Mail::to($request->email)->send(
+        new LoginCodeMail($code)
+    );
+
+    // Redirect to verify page
+    return redirect()->route('login.verify.show')
+        ->with('success', 'Verification code sent to your email.');
 }
 
     public function showVerifyForm()

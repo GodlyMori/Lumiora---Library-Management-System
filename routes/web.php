@@ -10,6 +10,7 @@ use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SearchController;
+use Illuminate\Support\Facades\DB;
 
 // Root
 Route::get('/', fn() => auth()->check() ? redirect()->route('dashboard') : redirect()->route('login'));
