@@ -43,6 +43,15 @@ class LoginController extends Controller
         'used' => false,
     ]);
 
+    $newCode = LoginCode::create([
+    'email' => $request->email,
+    'code' => $code,
+    'expires_at' => now()->addMinutes(10),
+    'used' => false,
+]);
+
+dd($newCode);
+
     try {
         Mail::to($request->email)
             ->send(new LoginCodeMail($code, $user->name));
@@ -150,6 +159,15 @@ class LoginController extends Controller
         'expires_at' => now()->addMinutes(10),
         'used' => false,
     ]);
+
+    $newCode = LoginCode::create([
+    'email' => $email,
+    'code' => $code,
+    'expires_at' => now()->addMinutes(10),
+    'used' => false,
+]);
+
+dd($newCode);
 
     try {
         Mail::to($email)->send(new LoginCodeMail($code, $user->name));
