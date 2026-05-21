@@ -105,11 +105,11 @@ class LoginController extends Controller
         
 
         // SAFE expiration check using model cast helper
-        if (!$loginCode->isValid()) {
-            return back()->withErrors([
-                'code' => 'Code expired.'
-            ]);
-        }
+        if (now()->gt($loginCode->expires_at)) {
+    return back()->withErrors([
+        'code' => 'Code expired.'
+    ]);
+}
 
         if (trim($request->code) !== trim($loginCode->code)) {
             return back()->withErrors([
