@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\LoginCode;
 use App\Models\User;
+use App\Mail\LoginCodeMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 
 class LoginController extends Controller
 {
@@ -26,42 +27,39 @@ class LoginController extends Controller
 
         if (!$user) {
             return back()->withErrors([
-                'email' => 'No account found.'
-            ]);
+                'email' => 'No account found with this email address.'
+            ])->onlyInput('email');
         }
 
-        // generate OTP
-        $code = random_int(100000, 999999);
+        // remove old codes
+        LoginCode::where('email', $request->email)->delete();
 
-        // store OTP
-        LoginCode::create([
+        $code = LoginCode::generateCode();
+
+        $loginCode = LoginCode::create([
             'email' => $request->email,
             'code' => $code,
             'expires_at' => now()->addMinutes(10),
-            'used' => false,
+            'used' => 0,
         ]);
 
-        // send via Resend API
-        Http::withHeaders([
-            'Authorization' => 'Bearer ' . env('RESEND_API_KEY'),
-            'Content-Type' => 'application/json',
-        ])->post('https://api.resend.com/emails', [
-            'from' => 'Your App <onboarding@resend.dev>',
-            'to' => $request->email,
-            'subject' => 'Your Login Code',
-            'html' => "<h2>Your OTP Code is: <strong>{$code}</strong></h2>",
+        // store session (IMPORTANT)
+        session([
+            'verification_email' => $request->email
         ]);
 
-        // ONLY session needed
-        session(['otp_email' => $request->email]);
+        // send email (make sure this works in prod)
+        Mail::to($request->email)->send(new LoginCodeMail($code));
 
-        return redirect()->route('login.verify.show');
+        return redirect()->route('login.verify.show')
+            ->with('success', 'Verification code sent to your email.');
     }
 
     public function showVerifyForm()
     {
-        if (!session('otp_email')) {
-            return redirect()->route('login');
+        if (!session('verification_email')) {
+            return redirect()->route('login')
+                ->withErrors(['email' => 'Please request a code first.']);
         }
 
         return view('auth.verify-code');
@@ -73,44 +71,79 @@ class LoginController extends Controller
             'code' => 'required|string|size:6',
         ]);
 
-        $email = session('otp_email');
+        $email = session('verification_email');
 
         if (!$email) {
-            return redirect()->route('login');
+            return redirect()->route('login')
+                ->withErrors([
+                    'email' => 'Session expired. Please request a new code.'
+                ]);
         }
 
-        // get latest OTP
-        $otp = LoginCode::where('email', $email)
-            ->latest('id')
+        // Fetch the latest unused code for this email (don't rely on DB time comparison)
+        // We'll perform the expiration check in PHP using the model cast (timezone-safe).
+        $loginCode = LoginCode::where('email', $email)
+            ->where('used', false)
+            ->latest()
             ->first();
 
-        if (!$otp) {
-            return back()->withErrors(['code' => 'No OTP found.']);
+        if (!$loginCode) {
+            return back()->withErrors([
+                'code' => 'No verification code found.'
+            ]);
         }
 
-        if ($otp->used) {
-            return back()->withErrors(['code' => 'OTP already used.']);
+        // DEBUG: uncomment if needed
+        
+        // dd([
+        //     'now' => now(),
+        //     'expires_at' => $loginCode->expires_at,
+        //     'diff' => now()->diffInSeconds($loginCode->expires_at, false),
+        //     'code_db' => $loginCode->code,
+        //     'code_input' => $request->code,
+        // ]);
+        
+
+        // SAFE expiration check using model cast helper
+        if (!$loginCode->isValid()) {
+            return back()->withErrors([
+                'code' => 'Code expired.'
+            ]);
         }
 
-        if (now()->gt($otp->expires_at)) {
-            return back()->withErrors(['code' => 'OTP expired.']);
+        if (trim($request->code) !== trim($loginCode->code)) {
+            return back()->withErrors([
+                'code' => 'Incorrect verification code.'
+            ]);
         }
 
-        if ($request->code !== $otp->code) {
-            return back()->withErrors(['code' => 'Incorrect code.']);
+        if ($loginCode->used) {
+            return back()->withErrors([
+                'code' => 'Code already used.'
+            ]);
         }
 
-        // mark used
-        $otp->update(['used' => true]);
+        $loginCode->update([
+            'used' => 1
+        ]);
 
-        // login user
         $user = User::where('email', $email)->first();
+
+        if (!$user) {
+            return redirect()->route('login')
+                ->withErrors([
+                    'email' => 'User not found.'
+                ]);
+        }
 
         Auth::login($user);
 
-        session()->forget('otp_email');
+        session()->forget('verification_email');
 
-        return redirect()->route('dashboard');
+        request()->session()->regenerate();
+
+        return redirect()->route('dashboard')
+            ->with('success', 'Welcome back, ' . $user->name . '!');
     }
 
     public function logout(Request $request)
