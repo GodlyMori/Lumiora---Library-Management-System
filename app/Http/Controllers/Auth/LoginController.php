@@ -84,10 +84,10 @@ class LoginController extends Controller
         ->get();
 
     dd([
-        'entered_code' => $request->code,
-        'session_email' => $email,
-        'all_codes' => $allCodes
-    ]);
+    'entered_code' => $request->code,
+    'session_email' => $email,
+    'all_codes' => $allCodes->toArray(),
+]);
 }
     public function resendCode(Request $request)
     {
