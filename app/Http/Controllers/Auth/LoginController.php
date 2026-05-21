@@ -80,9 +80,15 @@ class LoginController extends Controller
         }
 
         // 🔥 ALWAYS FETCH LATEST CODE (NO FILTER DEPENDENCY)
-        $loginCode = LoginCode::where('email', $email)
-            ->orderByDesc('id')
-            ->first();
+        $allCodes = LoginCode::where('email', $email)
+    ->orderByDesc('id')
+    ->get();
+
+dd([
+    'entered_code' => $request->code,
+    'session_email' => $email,
+    'all_codes' => $allCodes
+]);
 
         // 🔥 SAFE VALIDATION (NO SQL DEPENDENCY)
         if (
