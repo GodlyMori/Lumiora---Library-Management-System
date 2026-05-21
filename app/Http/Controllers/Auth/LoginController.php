@@ -76,12 +76,66 @@ class LoginController extends Controller
 
     $email = session('verification_email');
 
-    dd([
-        'session_email' => $email,
-        'input_code' => $request->code,
-        'all_codes' => LoginCode::all(),
+    if (!$email) {
+        return redirect()->route('login')
+            ->withErrors([
+                'email' => 'Session expired. Please request a new code.'
+            ]);
+    }
+
+    $loginCode = LoginCode::where('email', $email)
+        ->where('used', 0)
+        ->latest()
+        ->first();
+
+    if (!$loginCode) {
+        return back()->withErrors([
+            'code' => 'No active verification code found.'
+        ]);
+    }
+
+    // DEBUG (remove later if everything works)
+    // dd([
+    //     'now' => now(),
+    //     'expires_at' => $loginCode->expires_at,
+    //     'is_expired' => now()->gt($loginCode->expires_at),
+    //     'db_code' => $loginCode->code,
+    //     'input_code' => $request->code,
+    // ]);
+
+    if (now()->gt($loginCode->expires_at)) {
+        return back()->withErrors([
+            'code' => 'Code expired.'
+        ]);
+    }
+
+    if (trim($request->code) !== trim($loginCode->code)) {
+        return back()->withErrors([
+            'code' => 'Incorrect verification code.'
+        ]);
+    }
+
+    $loginCode->update([
+        'used' => 1
     ]);
 
+    $user = User::where('email', $email)->first();
+
+    if (!$user) {
+        return redirect()->route('login')
+            ->withErrors([
+                'email' => 'User not found.'
+            ]);
+    }
+
+    Auth::login($user);
+
+    session()->forget('verification_email');
+
+    $request->session()->regenerate();
+
+    return redirect()->route('dashboard')
+        ->with('success', 'Welcome back, ' . $user->name . '!');
 }
 
     public function logout(Request $request)
