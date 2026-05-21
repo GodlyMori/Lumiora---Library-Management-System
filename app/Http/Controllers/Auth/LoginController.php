@@ -139,6 +139,39 @@ class LoginController extends Controller
             ->with('success', 'Welcome back, ' . $user->name . '!');
     }
 
+    public function resendCode(Request $request)
+{
+    $email = session('verification_email');
+
+    if (!$email) {
+        return redirect()->route('login')
+            ->withErrors(['email' => 'Session expired. Please login again.']);
+    }
+
+    $user = User::where('email', $email)->first();
+
+    if (!$user) {
+        return redirect()->route('login')
+            ->withErrors(['email' => 'User not found.']);
+    }
+
+    // invalidate old codes
+    LoginCode::where('email', $email)->update(['used' => 1]);
+
+    $code = LoginCode::generateCode();
+
+    LoginCode::create([
+        'email' => $email,
+        'code' => $code,
+        'expires_at' => now()->addMinutes(10),
+        'used' => 0,
+    ]);
+
+    Mail::to($email)->send(new LoginCodeMail($code));
+
+    return back()->with('success', 'New code sent!');
+}
+
     public function logout(Request $request)
     {
         Auth::logout();

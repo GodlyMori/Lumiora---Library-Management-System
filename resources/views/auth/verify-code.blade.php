@@ -220,7 +220,7 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     // Auto-submit when 6 digits are entered
     const codeInput = document.querySelector('input[name="code"]');
@@ -245,6 +245,6 @@
             this.form.submit();
         }
     });
-</script>
+</script> -->
 </body>
 </html>
