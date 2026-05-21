@@ -31,24 +31,25 @@ class LoginController extends Controller
             ])->onlyInput('email');
         }
 
-        // remove old codes
+        // delete previous OTPs
         LoginCode::where('email', $request->email)->delete();
 
+        // generate OTP
         $code = LoginCode::generateCode();
 
-        $loginCode = LoginCode::create([
+        LoginCode::create([
             'email' => $request->email,
             'code' => $code,
             'expires_at' => now()->addMinutes(10),
             'used' => 0,
         ]);
 
-        // store session (IMPORTANT)
+        // store email in session
         session([
             'verification_email' => $request->email
         ]);
 
-        // send email (make sure this works in prod)
+        // send OTP via email
         Mail::to($request->email)->send(new LoginCodeMail($code));
 
         return redirect()->route('login.verify.show')
@@ -75,16 +76,13 @@ class LoginController extends Controller
 
         if (!$email) {
             return redirect()->route('login')
-                ->withErrors([
-                    'email' => 'Session expired. Please request a new code.'
-                ]);
+                ->withErrors(['email' => 'Session expired. Please request a new code.']);
         }
 
-        // Fetch the latest unused code for this email (don't rely on DB time comparison)
-        // We'll perform the expiration check in PHP using the model cast (timezone-safe).
+        // get latest active OTP (safe query for MySQL + Render)
         $loginCode = LoginCode::where('email', $email)
-            ->where('used', false)
-            ->latest()
+            ->where('used', 0)
+            ->latest('id')
             ->first();
 
         if (!$loginCode) {
@@ -93,40 +91,33 @@ class LoginController extends Controller
             ]);
         }
 
-        // DEBUG: uncomment if needed
-        
-        dd([
-            'now' => now(),
-            'expires_at' => $loginCode->expires_at,
-            'diff' => now()->diffInSeconds($loginCode->expires_at, false),
-            'code_db' => $loginCode->code,
-            'code_input' => $request->code,
-        ]);
-        
-
-        // SAFE expiration check using model cast helper
+        // 1. check expiration FIRST
         if (now()->gt($loginCode->expires_at)) {
-    return back()->withErrors([
-        'code' => 'Code expired.'
-    ]);
-}
-
-        if (trim($request->code) !== trim($loginCode->code)) {
             return back()->withErrors([
-                'code' => 'Incorrect verification code.'
+                'code' => 'Code expired.'
             ]);
         }
 
+        // 2. check if already used
         if ($loginCode->used) {
             return back()->withErrors([
                 'code' => 'Code already used.'
             ]);
         }
 
+        // 3. check code match
+        if (trim($request->code) !== trim($loginCode->code)) {
+            return back()->withErrors([
+                'code' => 'Incorrect verification code.'
+            ]);
+        }
+
+        // mark as used
         $loginCode->update([
             'used' => 1
         ]);
 
+        // get user
         $user = User::where('email', $email)->first();
 
         if (!$user) {
@@ -136,11 +127,13 @@ class LoginController extends Controller
                 ]);
         }
 
+        // login user
         Auth::login($user);
 
+        // clear session
         session()->forget('verification_email');
 
-        request()->session()->regenerate();
+        $request->session()->regenerate();
 
         return redirect()->route('dashboard')
             ->with('success', 'Welcome back, ' . $user->name . '!');
