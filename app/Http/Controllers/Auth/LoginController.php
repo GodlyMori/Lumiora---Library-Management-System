@@ -89,8 +89,8 @@ class LoginController extends Controller
     }
 
     // ✅ FIXED UTC COMPARISON
-    if (now('UTC')->greaterThan(\Carbon\Carbon::parse($loginCode->expires_at))) {
-        return back()->withErrors(['code' => 'Code expired. Please request a new one.']);
+    if (now()->greaterThan($loginCode->expires_at)) {
+        return back()->withErrors(['code' => 'Code expired.']);
     }
 
     if ((int)$loginCode->used === 1) {
