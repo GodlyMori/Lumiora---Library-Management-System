@@ -50,6 +50,10 @@ RUN mkdir -p storage/framework/cache storage/framework/sessions \
 storage/framework/views bootstrap/cache public/uploads \
 && chown -R www-data:www-data storage bootstrap/cache public/uploads \
 && chmod -R 775 storage bootstrap/cache public/uploads
+# Ensure Laravel log exists
+RUN touch storage/logs/laravel.log \
+&& chown -R www-data:www-data storage bootstrap/cache \
+&& chmod -R 775 storage bootstrap/cache
 # (Optional) Run migrations
 RUN php artisan migrate --force || true
 # Expose port
