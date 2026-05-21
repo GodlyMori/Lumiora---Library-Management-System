@@ -82,7 +82,7 @@ class LoginController extends Controller
 
         // DEBUG SAFE QUERY (no filtering issues)
         $loginCode = LoginCode::where('email', $email)
-            ->latest()
+            ->latest('id')
             ->first();
 
         if (!$loginCode) {
@@ -103,11 +103,11 @@ class LoginController extends Controller
         
 
         // SAFE expiration check (timezone-proof)
-        if (now()->greaterThan($loginCode->expires_at)) {
-            return back()->withErrors([
-                'code' => 'Code expired.'
-            ]);
-        }
+        if (now()->gt(\Carbon\Carbon::parse($loginCode->expires_at))) {
+    return back()->withErrors([
+        'code' => 'Code expired.'
+    ]);
+}
 
         if (trim($request->code) !== trim($loginCode->code)) {
             return back()->withErrors([
