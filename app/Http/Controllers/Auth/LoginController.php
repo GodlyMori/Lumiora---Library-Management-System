@@ -40,7 +40,7 @@ class LoginController extends Controller
         'email' => $request->email,
         'code' => $code,
         'expires_at' => now()->addMinutes(10),
-        'used' => 0,
+        'used' => false,
     ]);
 
     try {
@@ -79,51 +79,43 @@ class LoginController extends Controller
 
     if (!$email) {
         return redirect()->route('login')
-            ->withErrors(['email' => 'Session expired. Please request a new code.']);
+            ->withErrors([
+                'email' => 'Session expired. Please request a new code.'
+            ]);
     }
 
+    // Get latest unused OTP
     $loginCode = LoginCode::where('email', $email)
-    ->where('used', 0)
-    ->latest()
-    ->first();
-
-if (!$loginCode) {
-
-    $allCodes = LoginCode::where('email', $email)
+        ->where('used', false)
         ->latest()
-        ->get();
+        ->first();
 
-    dd([
-        'session_email' => $email,
-        'entered_code' => trim($request->code),
-        'all_codes' => $allCodes->map(function ($c) {
-            return [
-                'id' => $c->id,
-                'code' => $c->code,
-                'used' => $c->used,
-                'expires_at' => $c->expires_at,
-                'created_at' => $c->created_at,
-            ];
-        }),
-    ]);
-}
-
-if (trim($request->code) !== trim($loginCode->code)) {
-    return back()->withErrors([
-        'code' => 'Incorrect verification code.'
-    ]);
-}
-
-if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
-    return back()->withErrors(['code' => 'Code expired.']);
-}
-
-    if ((int)$loginCode->used === 1) {
-        return back()->withErrors(['code' => 'Code already used.']);
+    if (!$loginCode) {
+        return back()->withErrors([
+            'code' => 'No active verification code found.'
+        ]);
     }
 
-    $loginCode->update(['used' => 1]);
+    // Compare manually
+    if (trim($request->code) !== trim($loginCode->code)) {
+        return back()->withErrors([
+            'code' => 'Incorrect verification code.'
+        ]);
+    }
 
+    // Check expiration
+    if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
+        return back()->withErrors([
+            'code' => 'Code expired.'
+        ]);
+    }
+
+    // Mark as used
+    $loginCode->update([
+        'used' => true
+    ]);
+
+    // Login user
     $user = User::where('email', $email)->first();
 
     Auth::login($user);
@@ -135,6 +127,7 @@ if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
     return redirect()->route('dashboard')
         ->with('success', 'Welcome back, ' . $user->name . '!');
 }
+
     public function resendCode(Request $request)
 {
     $email = session('verification_email');
@@ -155,7 +148,7 @@ if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
         'email' => $email,
         'code' => $code,
         'expires_at' => now()->addMinutes(10),
-        'used' => 0,
+        'used' => false,
     ]);
 
     try {
