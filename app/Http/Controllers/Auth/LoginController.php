@@ -31,8 +31,7 @@ class LoginController extends Controller
         }
 
         // 🔥 INVALDATE ALL OLD CODES (CRITICAL FIX)
-        LoginCode::where('email', $request->email)
-            ->update(['used' => 1]);
+        
 
         // Generate OTP
         $code = LoginCode::generateCode();
@@ -80,24 +79,20 @@ class LoginController extends Controller
     }
 
     $loginCode = LoginCode::where('email', $email)
-    ->where('code', trim($request->code))
     ->where('used', 0)
     ->latest()
     ->first();
 
 if (!$loginCode) {
-
-    $allCodes = LoginCode::where('email', $email)
-        ->latest()
-        ->take(5)
-        ->get();
-
-    dd([
-        'entered_code' => trim($request->code),
-        'email' => $email,
-        'codes_in_db' => $allCodes,
+    return back()->withErrors([
+        'code' => 'No active verification code found.'
     ]);
+}
 
+if (trim($request->code) !== trim($loginCode->code)) {
+    return back()->withErrors([
+        'code' => 'Incorrect verification code.'
+    ]);
 }
 
 if (\Carbon\Carbon::parse($loginCode->expires_at)->isPast()) {
