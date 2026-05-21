@@ -43,29 +43,12 @@ class LoginController extends Controller
         'used' => false,
     ]);
 
-    $newCode = LoginCode::create([
+    LoginCode::create([
     'email' => $request->email,
     'code' => $code,
     'expires_at' => now()->addMinutes(10),
     'used' => false,
 ]);
-
-dd($newCode);
-
-    try {
-        Mail::to($request->email)
-            ->send(new LoginCodeMail($code, $user->name));
-
-        session(['verification_email' => $request->email]);
-
-        return redirect()->route('login.verify.show')
-            ->with('success', 'Verification code sent!');
-
-    } catch (\Exception $e) {
-        return back()->withErrors([
-            'email' => 'Failed to send email.'
-        ]);
-    }
 }
 
     public function showVerifyForm()
