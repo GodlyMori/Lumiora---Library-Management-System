@@ -68,7 +68,7 @@ class BorrowingController extends Controller
         return view('borrowings.create', [
             'books' => $books,
             'members' => $members,
-            'defaultDueDate' => now()->addDays(14)->format('Y-m-d')
+            'defaultDueDate' => now()->addDays(3)->format('Y-m-d')
         ]);
     }
 
