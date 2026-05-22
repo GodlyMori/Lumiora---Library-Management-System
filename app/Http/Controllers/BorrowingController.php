@@ -160,7 +160,7 @@ class BorrowingController extends Controller
 
         $today = today();
         $overdueDays = max(0, $today->diffInDays($borrowing->due_date, false) * -1);
-        $fine = $overdueDays * 5;
+        $fine = $overdueDays * 25; // ₱25 per day
 
         $borrowing->update([
             'status' => 'returned',
